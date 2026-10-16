@@ -26,6 +26,11 @@ function Toast() {
 export function App() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [dialog, setDialog] = useState<'export' | 'help' | null>(null);
+  // Showing the segments is about matching them with the code, so the code opens with them.
+  const segments = useEditor((s) => s.settings.segments);
+  useEffect(() => {
+    if (segments) setCodeOpen(true);
+  }, [segments]);
 
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => handleKeyDown(e, { openHelp: () => setDialog('help'), openExport: () => setDialog('export') });

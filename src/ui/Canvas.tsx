@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { editableIds, findNode, selectableIn } from '../core/doc';
 import { clamp, type Pt } from '../core/geometry';
 import { insertNode, nearestOnSubPaths, setNodeType, toSubPaths } from '../core/nodes';
+import { inspectShapes, segmentAt } from '../core/inspect';
 import { hitTest } from '../core/pick';
 import { geomToSegs } from '../core/shapes';
-import { enterGroup, geomFromSubPaths, nodeTargetId, setGeometry, setSelection, setTool, updateSettings } from '../state/actions';
+import { enterGroup, geomFromSubPaths, hoverSegment, nodeTargetId, setGeometry, setSelection, setTool, updateSettings } from '../state/actions';
 import {
   pickTolerance,
   startGesture,
@@ -19,7 +20,9 @@ import { store, useEditor, type ToolId } from '../state/store';
 import { Artwork } from './Artwork';
 import { Grid, Keylines } from './Guides';
 import { Icon } from './icons';
+import { Measure } from './Measure';
 import { Outlines, Overlay, ROTATE_CURSOR } from './Overlay';
+import { SegmentLayer } from './SegmentLayer';
 
 const ZOOM_MIN = 2;
 const ZOOM_MAX = 240;
@@ -220,8 +223,15 @@ export function Canvas() {
       const q = snap ? { x: Math.round(p.doc.x / step) * step, y: Math.round(p.doc.y / step) * step } : p.doc;
       store.patch({ pen: { ...st.pen, cursor: q } });
     } else if (st.tool === 'select' && !e.buttons) {
-      const hit = hitTest(st.doc, p.doc, st.scope, pickTolerance(viewRef.current.zoom), p.mod);
+      const tol = pickTolerance(viewRef.current.zoom);
+      const hit = hitTest(st.doc, p.doc, st.scope, tol, p.mod);
       if (hit !== st.hover) store.patch({ hover: hit });
+      if (st.settings.segments) {
+        // With the segments shown, the one under the pointer is matched in the source too.
+        const deep = hitTest(st.doc, p.doc, st.scope, tol, true);
+        const sh = deep ? inspectShapes(st.doc).find((x) => x.id === deep) : undefined;
+        hoverSegment(sh ? { id: sh.id, seg: sh.geom.kind === 'path' ? segmentAt(sh, p.doc) : null } : null);
+      }
     }
   };
 
@@ -284,10 +294,11 @@ export function Canvas() {
   const cursor = panning || spaceRef.current ? (gesture.current ? 'grabbing' : 'grab') : TOOL_CURSOR[s.tool];
 
   const selIds = useMemo(() => editableIds(s.doc, s.selection), [s.doc, s.selection]);
+  const shapes = useMemo(() => inspectShapes(s.doc), [s.doc]);
   const hoverIds = s.hover && !s.selection.includes(s.hover) && s.tool === 'select' ? [s.hover] : [];
 
   return (
-    <div className={`canvas ${s.settings.outline ? 'wire' : ''} tone-${s.settings.artboard}`} ref={ref} tabIndex={-1} style={{ cursor }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={(e) => endGesture(e, false)} onPointerCancel={(e) => endGesture(e, true)} onDoubleClick={onDoubleClick} onContextMenu={(e) => e.preventDefault()} data-testid="canvas">
+    <div className={`canvas ${s.settings.outline ? 'wire' : ''} tone-${s.settings.artboard}`} ref={ref} tabIndex={-1} style={{ cursor }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={(e) => endGesture(e, false)} onPointerCancel={(e) => endGesture(e, true)} onPointerLeave={() => !gesture.current && (hoverSegment(null), store.patch({ hover: null }))} onDoubleClick={onDoubleClick} onContextMenu={(e) => e.preventDefault()} data-testid="canvas">
       <svg className="scene" width={size.w} height={size.h}>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
           <rect className="artboard" x={0} y={0} width={s.doc.width} height={s.doc.height} />
@@ -295,15 +306,17 @@ export function Canvas() {
           <g className="art" data-testid="artwork">
             <Artwork doc={s.doc} />
           </g>
+          {s.settings.segments && <SegmentLayer shapes={shapes} zoom={view.zoom} hover={s.hoverSeg} focus={s.focus} />}
           {s.settings.keylines && <Keylines width={s.doc.width} height={s.doc.height} />}
           <rect className="artboard-edge" x={0} y={0} width={s.doc.width} height={s.doc.height} fill="none" vectorEffect="non-scaling-stroke" />
           <Outlines s={s} ids={hoverIds} className="outline hover" />
           <Outlines s={s} ids={selIds} className="outline" />
         </g>
       </svg>
+      {s.settings.measure && <Measure shapes={shapes} view={view} width={size.w} height={size.h} />}
       <Overlay s={s} view={view} width={size.w} height={size.h} />
       <ViewBar zoom={view.zoom} onZoomIn={() => zoomTo(view.zoom * 1.25)} onZoomOut={() => zoomTo(view.zoom / 1.25)} onFit={fit} onActual={() => zoomTo(Math.max(ZOOM_MIN, Math.round(view.zoom)))} />
-      <Hint tool={s.tool} hasSelection={selIds.length > 0} />
+      <Hint tool={s.tool} hasSelection={selIds.length > 0} segments={s.settings.segments} />
     </div>
   );
 }
@@ -349,6 +362,12 @@ function ViewBar({ zoom, onZoomIn, onZoomOut, onFit }: { zoom: number; onZoomIn(
       >
         <Icon name={settings.artboard === 'dark' ? 'moon' : settings.artboard === 'light' ? 'sun' : 'image'} />
       </button>
+      <button className={`btn icon ${settings.segments ? 'on' : ''}`} title="Segments (C): colour every segment of the drawing and find it in the code" aria-pressed={settings.segments} data-testid="segments-view" onClick={() => updateSettings({ segments: !settings.segments })}>
+        <Icon name="segments" />
+      </button>
+      <button className={`btn icon ${settings.measure ? 'on' : ''}`} title="Measure (M): the angle of diagonal lines and the size of the shape" aria-pressed={settings.measure} data-testid="measure-view" onClick={() => updateSettings({ measure: !settings.measure })}>
+        <Icon name="measure" />
+      </button>
       <button className={`btn icon ${settings.outline ? 'on' : ''}`} title="Outline view: see the paths without their stroke width (O)" aria-pressed={settings.outline} data-testid="outline-view" onClick={() => updateSettings({ outline: !settings.outline })}>
         <Icon name="convert" />
       </button>
@@ -385,7 +404,8 @@ const HINTS: Record<ToolId, string> = {
   hand: 'Drag to pan the canvas',
 };
 
-function Hint({ tool, hasSelection }: { tool: ToolId; hasSelection: boolean }) {
+function Hint({ tool, hasSelection, segments }: { tool: ToolId; hasSelection: boolean; segments: boolean }) {
   const needs = (tool === 'scale' || tool === 'scaleH' || tool === 'scaleV' || tool === 'rotate') && !hasSelection;
+  if (segments && tool === 'select') return <div className="hint">Click a segment to find it in the code · Shift-click picks the whole element · Hover to match it</div>;
   return <div className="hint">{needs ? 'Select something first, then drag to transform it' : HINTS[tool]}</div>;
 }

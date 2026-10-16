@@ -3,6 +3,7 @@ import { dist, rectFromPoints, type Pt, type Rect } from '../core/geometry';
 import { meanScale, rotateAbout, scaleAbout, translate, type Matrix } from '../core/matrix';
 import { isSmooth, moveNodes, setHandle, node as makeNode, type NodeRef, type SubPath } from '../core/nodes';
 import { fmt } from '../core/path';
+import { inspectShapes, segmentAt } from '../core/inspect';
 import { hitTest, marqueeSelect, type MarqueeMode } from '../core/pick';
 import {
   CENTER_PIVOT,
@@ -17,7 +18,7 @@ import {
   type ScaleTool,
 } from '../core/transform';
 import { uid, type Doc, type Geometry, type Node } from '../core/types';
-import { finishPen, geomFromSubPaths, liveSelection, nodeTargetId, parseNodeKey, setSelection, subPathsOf } from './actions';
+import { finishPen, focusSegment, geomFromSubPaths, liveSelection, nodeTargetId, parseNodeKey, setSelection, subPathsOf } from './actions';
 import { store, type ToolId } from './store';
 
 /* Pointer gestures. Each pointer-down on the canvas turns into one of these, which then follows the pointer
@@ -246,21 +247,40 @@ function selectGesture(start: Ptr, hit: string | null, ctx: GestureContext): Ges
   const target = hitTest(s.doc, start.doc, s.scope, pickTolerance(zoom), start.mod);
   if (target) {
     const selected = ids.includes(target);
+    let gesture: Gesture;
     if (start.shift) {
-      if (selected) return moveGesture(ids, start, () => setSelection(ids.filter((i) => i !== target)));
-      const next = [...ids, target];
-      setSelection(next);
-      return moveGesture(next, start, () => {});
+      if (selected) gesture = moveGesture(ids, start, () => setSelection(ids.filter((i) => i !== target)));
+      else {
+        const next = [...ids, target];
+        setSelection(next);
+        gesture = moveGesture(next, start, () => {});
+      }
+    } else if (selected) gesture = moveGesture(ids, start, () => (ids.length > 1 ? setSelection([target]) : undefined));
+    else {
+      // A click on something deep inside a closed group with Ctrl/⌘ held selects the shape itself and opens its group.
+      if (start.mod) {
+        const parent = locate(s.doc, target)?.parent?.id ?? null;
+        setSelection([target], parent);
+      } else setSelection([target]);
+      gesture = moveGesture([target], start, () => {});
     }
-    if (selected) return moveGesture(ids, start, () => (ids.length > 1 ? setSelection([target]) : undefined));
-    // A click on something deep inside a closed group with Ctrl/⌘ held selects the shape itself and opens its group.
-    if (start.mod) {
-      const parent = locate(s.doc, target)?.parent?.id ?? null;
-      setSelection([target], parent);
-    } else setSelection([target]);
-    return moveGesture([target], start, () => {});
+    pickSegment(start, zoom);
+    return gesture;
   }
   return marqueeGesture(start, start.shift);
+}
+
+/**
+ * With the segments shown, a click also picks the segment under the pointer, so it can be found in the source;
+ * with Shift it picks the whole element.
+ */
+function pickSegment(start: Ptr, zoom: number): void {
+  const s = S();
+  if (!s.settings.segments) return;
+  const deep = hitTest(s.doc, start.doc, s.scope, pickTolerance(zoom), true);
+  const shape = deep ? inspectShapes(s.doc).find((x) => x.id === deep) : undefined;
+  if (!deep || !shape) return;
+  focusSegment({ id: deep, seg: start.shift || shape.geom.kind !== 'path' ? null : segmentAt(shape, start.doc) });
 }
 
 function transformToolGesture(tool: ToolId, start: Ptr, hit: string | null, ctx: GestureContext): Gesture {

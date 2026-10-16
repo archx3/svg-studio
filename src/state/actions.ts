@@ -7,6 +7,7 @@ import {
   findNode,
   groupNodes,
   insertNodes,
+  isInside,
   locate,
   nodeBounds,
   normalizeSelection,
@@ -23,9 +24,10 @@ import { deleteNodes, fromSubPaths, insertNode, moveNodes, segmentCount, setClos
 import { serializePath } from '../core/path';
 import { geomToPath, geomToSegs } from '../core/shapes';
 import { rebaseStyle, serializeSvg, parseSvg, SvgParseError } from '../core/svg-io';
+import { tidyDoc } from '../core/tidy';
 import { CENTER_PIVOT, alignDeltas, distributeDeltas, type AlignMode } from '../core/transform';
 import { emptyDoc, uid, type Geometry, type GroupNode, type Node, type Style, type StyleKey } from '../core/types';
-import { store, type Settings, type ToolId } from './store';
+import { store, type SegRef, type Settings, type ToolId } from './store';
 
 const S = () => store.get();
 
@@ -56,11 +58,45 @@ export function setSelection(ids: readonly string[], scope?: string | null): voi
   const s = S();
   const ordered = normalizeSelection(s.doc, ids);
   const same = ordered.length === s.selection.length && ordered.every((id, i) => id === s.selection[i]);
+  // The segment picked on the canvas or in the source stays only while the selection still contains its shape.
+  const focus = s.focus && ordered.some((id) => id === s.focus!.id || isInside(s.doc, s.focus!.id, id)) ? s.focus : null;
   store.patch({
     selection: ordered,
+    focus,
     ...(scope !== undefined ? { scope } : {}),
     ...(same ? {} : { nodeSel: [], pivot: CENTER_PIVOT }),
   });
+}
+
+/** Points at a segment of a shape (or at the whole element) on the canvas and in the source. */
+export function focusSegment(ref: SegRef | null): void {
+  const s = S();
+  const cur = s.focus;
+  if (cur === ref || (cur && ref && cur.id === ref.id && cur.seg === ref.seg)) return;
+  store.patch({ focus: ref });
+}
+
+/** The pointer is over a segment (on the canvas or in the source). */
+export function hoverSegment(ref: SegRef | null): void {
+  const cur = S().hoverSeg;
+  if (cur === ref || (cur && ref && cur.id === ref.id && cur.seg === ref.seg)) return;
+  store.patch({ hoverSeg: ref });
+}
+
+/** A position in the source was picked: select that shape and point at the segment. */
+export function pickFromSource(ref: SegRef): void {
+  const s = S();
+  if (!s.selection.includes(ref.id) && !s.selection.some((id) => isInside(s.doc, ref.id, id))) selectFromList(ref.id);
+  focusSegment(ref);
+}
+
+/** Cleans up the document's markup (see `tidyDoc`). Returns false when there was nothing to tidy. */
+export function tidyDocument(): boolean {
+  const s = S();
+  const next = tidyDoc(s.doc);
+  if (serializeSvg(next, { includeHidden: true }) === serializeSvg(s.doc, { includeHidden: true })) return false;
+  store.commit(next);
+  return true;
 }
 
 export function clearSelection(): void {

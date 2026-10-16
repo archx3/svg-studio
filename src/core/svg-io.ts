@@ -120,8 +120,12 @@ function hasStroke(style: Style): boolean {
 export function parseSvg(input: string): { doc: Doc; warnings: string[] } {
   let text = input.trim();
   if (!text) throw new SvgParseError('Nothing to import: the text is empty.');
-  // Bare path data, or bare elements without the <svg> around them.
-  if (!text.includes('<') && /^[Mm]/.test(text)) text = `<path d="${text.replace(/"/g, '')}"/>`;
+  // Bare path data, or bare elements without the <svg> around them. Anything else without markup is not SVG at all
+  // (reading it as an empty drawing would clear the canvas of someone who only mistyped).
+  if (!text.includes('<')) {
+    if (!/^[Mm]/.test(text)) throw new SvgParseError('That does not look like an SVG: expected markup such as <svg>…</svg>, or path data.');
+    text = `<path d="${text.replace(/"/g, '')}"/>`;
+  }
   if (!/<svg[\s>]/i.test(text)) text = `<svg xmlns="http://www.w3.org/2000/svg">${text}</svg>`;
 
   const parser = new DOMParser();

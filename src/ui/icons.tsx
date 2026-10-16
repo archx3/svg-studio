@@ -67,6 +67,9 @@ const ICONS = {
   corner: [P('M4 18L12 6l8 12'), <rect key="a" x="10.4" y="4.4" width="3.2" height="3.2" />],
   addNode: [P('M3 17c5-9 13-9 18 0'), P('M12 14v6'), P('M9 17h6')],
   closePath: [P('M5 18l3-12 8 2 3 10z'), <circle key="a" cx="5" cy="18" r="1.4" />],
+  segments: [P('M3 17l5-9'), P('M10 7l5 9'), P('M17 16h4'), <circle key="a" cx="3.5" cy="17" r="1.4" />, <circle key="b" cx="9" cy="7" r="1.4" />, <circle key="c" cx="16" cy="16" r="1.4" />],
+  measure: [P('M4 19h16'), P('M4 19L15 6'), P('M10 19a6 6 0 0 0-1.6-4')],
+  wand: [P('M15 4V2'), P('M15 16v-2'), P('M8 9H6'), P('M22 9h-2'), P('M17.8 11.8L19 13'), P('M17.8 6.2L19 5'), P('M3 21l9-9'), P('M12.2 6.2L11 5')],
   pivot: [<circle key="c" cx="12" cy="12" r="3" />, P('M12 3v4'), P('M12 17v4'), P('M3 12h4'), P('M17 12h4')],
   image: [<rect key="r" x="3" y="3" width="18" height="18" rx="2" />, <circle key="c" cx="9" cy="9" r="1.6" />, P('M21 15l-4-4L6 21')],
 } satisfies Record<string, ReactNode[]>;

@@ -1068,9 +1068,10 @@ textarea.input {
 /* ------------------------------------------------------------- code panel */
 
 .code-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
-  height: 240px;
+  height: 300px;
   flex: none;
   background: var(--panel);
   border-top: 1px solid var(--line);
@@ -1105,20 +1106,6 @@ textarea.input {
 
 .status.error {
   color: var(--danger);
-}
-
-.code-area {
-  flex: 1;
-  min-height: 0;
-  resize: none;
-  padding: 10px 12px;
-  border: 0;
-  outline: none;
-  background: var(--panel-2);
-  font: 12.5px/1.55 var(--mono);
-  tab-size: 2;
-  white-space: pre;
-  overflow: auto;
 }
 
 /* ---------------------------------------------------------------- dialogs */
@@ -1300,4 +1287,212 @@ textarea.input {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ----------------------------------------------------- source and segments */
+
+.tabs {
+  display: flex;
+  align-self: stretch;
+  gap: 2px;
+  margin: -6px 0 -6px -10px;
+}
+
+.tab {
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.code-wrap {
+  --code-pad-x: 14px;
+  --code-pad-y: 10px;
+  --code-lh: 20px;
+  --code-font: 12.5px/20px var(--mono);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--panel-2);
+}
+
+.code-wrap .code-area {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--code-pad-y) var(--code-pad-x);
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font: var(--code-font);
+  font-variant-ligatures: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+/* With the segments shown the text is drawn in the layer behind the editor, which only keeps the caret and the selection. */
+.code-wrap.layered .code-area {
+  color: transparent;
+  caret-color: var(--text);
+}
+
+.code-wrap.layered .code-area::selection {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: transparent;
+}
+
+.code-under {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.code-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font: var(--code-font);
+  font-variant-ligatures: none;
+  will-change: transform;
+}
+
+.code-pre {
+  margin: 0;
+  padding: var(--code-pad-y) var(--code-pad-x);
+  font: inherit;
+  font-variant-ligatures: none;
+  tab-size: 2;
+  white-space: pre;
+  color: var(--text);
+}
+
+.code-pre mark {
+  border-radius: 3px;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.code-box {
+  position: absolute;
+  height: var(--code-lh);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.code-box.hover {
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+.code-box.focus {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 4px color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+.code-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font: var(--code-font);
+}
+
+.gen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.gen-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen-code {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  background: var(--panel-2);
+  font: 12.5px/20px var(--mono);
+  tab-size: 2;
+  white-space: pre;
+}
+
+.canvas .overlay.measure {
+  pointer-events: none;
+}
+
+.angle-label text {
+  fill: #fff;
+  font: 600 11px var(--font);
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.65);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+.shape-box {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.75;
+}
+
+.shape-label {
+  fill: var(--muted);
+  font: 600 11px var(--font);
+}
+
+.code-resize {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.code-resize::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.1s;
+}
+
+.code-resize:hover::after,
+.code-resize:focus-visible::after {
+  background: var(--accent);
 }

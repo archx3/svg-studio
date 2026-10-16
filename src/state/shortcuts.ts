@@ -129,6 +129,8 @@ export function handleKeyDown(e: KeyboardEvent, hooks: ShortcutHooks): void {
   if (e.shiftKey && key === 'v') return void flip('v');
   if (s.tool === 'node' && key === 'n' && !e.shiftKey) return addNodeAfterSelected();
   if (key === 'o' && !e.shiftKey && !e.altKey) return updateSettings({ outline: !s.settings.outline });
+  if (key === 'c' && !e.shiftKey && !e.altKey) return updateSettings({ segments: !s.settings.segments });
+  if (key === 'm' && !e.shiftKey && !e.altKey) return updateSettings({ measure: !s.settings.measure });
   const tool = TOOL_KEYS[key];
   if (tool && !e.shiftKey && !e.altKey) setTool(tool);
 }

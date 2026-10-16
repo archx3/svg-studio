@@ -22,6 +22,16 @@ export interface Settings {
   outline: boolean;
   /** The artboard's background: following the theme, or always light or dark (for icons that are black or white). */
   artboard: 'auto' | 'light' | 'dark';
+  /** Colour every segment of the drawing, and show the same colours on the matching text in the source. */
+  segments: boolean;
+  /** Show the angle of diagonal lines and the size of the whole shape. */
+  measure: boolean;
+}
+
+/** A shape and one of its segments (null: the whole element), as the canvas and the source point at each other. */
+export interface SegRef {
+  id: string;
+  seg: number | null;
 }
 
 export interface PenState {
@@ -57,6 +67,10 @@ export interface EditorState {
   pen: PenState | null;
   overlay: Overlay | null;
   hover: string | null;
+  /** The segment (or element) picked on the canvas or in the source, shown on both. */
+  focus: SegRef | null;
+  /** The segment the pointer is over, on the canvas or in the source. */
+  hoverSeg: SegRef | null;
   toast: Toast | null;
   canUndo: boolean;
   canRedo: boolean;
@@ -197,7 +211,7 @@ export class Store {
   }
 }
 
-export const DEFAULT_SETTINGS: Settings = { snap: true, snapStep: 1, grid: true, keylines: true, selectMode: 'encompass', scaleStroke: false, outline: false, artboard: 'auto' };
+export const DEFAULT_SETTINGS: Settings = { snap: true, snapStep: 1, grid: true, keylines: true, selectMode: 'encompass', scaleStroke: false, outline: false, artboard: 'auto', segments: false, measure: false };
 
 export function createInitialState(doc: Doc, name: string, settings: Settings = DEFAULT_SETTINGS): EditorState {
   return {
@@ -212,6 +226,8 @@ export function createInitialState(doc: Doc, name: string, settings: Settings = 
     pen: null,
     overlay: null,
     hover: null,
+    focus: null,
+    hoverSeg: null,
     toast: null,
     canUndo: false,
     canRedo: false,

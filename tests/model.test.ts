@@ -119,6 +119,8 @@ describe('svg import and export', () => {
 
   it('rejects text that is not an SVG', () => {
     expect(() => parseSvg('   ')).toThrow(SvgParseError);
+    // Plain words are not read as an empty drawing: that would clear the canvas of someone who mistyped.
+    expect(() => parseSvg('this is not svg')).toThrow(/does not look like an SVG/);
     expect(() => parseSvg('<html><body>hello</body></html>')).not.toThrow(); // wrapped as an empty svg
     expect(parseSvg('<html><body>hello</body></html>').doc.children).toHaveLength(0);
   });

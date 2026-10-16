@@ -13,6 +13,11 @@ export type Seg =
 
 export interface ParsedPath {
   segs: Seg[];
+  /**
+   * Where each segment is written in the path data, as [start, end) offsets and parallel to `segs`: the command letter
+   * (when it has one) through its last number. Null for the moveto that is implied after a closepath.
+   */
+  spans: Array<[number, number] | null>;
   /** Why parsing stopped early, if it did. Everything before the problem is still returned, as browsers draw it. */
   error?: string;
 }
@@ -22,6 +27,7 @@ const NUMBER = /[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
 
 export function parsePath(d: string): ParsedPath {
   const segs: Seg[] = [];
+  const spans: Array<[number, number] | null> = [];
   const n = d.length;
   let i = 0;
   let cmd = '';
@@ -61,14 +67,16 @@ export function parsePath(d: string): ParsedPath {
   for (;;) {
     skip();
     if (i >= n) break;
+    const tokStart = i;
     const ch = d[i]!;
     if (/[a-zA-Z]/.test(ch)) {
-      if (!(ch.toLowerCase() in COUNTS)) return { segs, error: `Unknown path command "${ch}"` };
+      if (!(ch.toLowerCase() in COUNTS)) return { segs, spans, error: `Unknown path command "${ch}"` };
       cmd = ch;
       i++;
-      if (!segs.length && ch.toLowerCase() !== 'm') return { segs, error: 'A path must start with a moveto (M)' };
+      if (!segs.length && ch.toLowerCase() !== 'm') return { segs, spans, error: 'A path must start with a moveto (M)' };
       if (ch === 'z' || ch === 'Z') {
         segs.push({ t: 'Z' });
+        spans.push([tokStart, i]);
         cx = sx;
         cy = sy;
         prevC = prevQ = null;
@@ -77,7 +85,7 @@ export function parsePath(d: string): ParsedPath {
         continue;
       }
     } else if (!cmd) {
-      return { segs, error: segs.length ? 'Numbers after a closepath need a command' : 'A path must start with a moveto (M)' };
+      return { segs, spans, error: segs.length ? 'Numbers after a closepath need a command' : 'A path must start with a moveto (M)' };
     }
 
     const lower = cmd.toLowerCase();
@@ -96,10 +104,11 @@ export function parsePath(d: string): ParsedPath {
       }
       a.push(v);
     }
-    if (!ok) return { segs, error: `Missing or bad number for "${cmd}"` };
+    if (!ok) return { segs, spans, error: `Missing or bad number for "${cmd}"` };
 
     if (needMove && lower !== 'm') {
       segs.push({ t: 'M', x: sx, y: sy });
+      spans.push(null);
     }
     needMove = false;
 
@@ -171,10 +180,11 @@ export function parsePath(d: string): ParsedPath {
         cy = y;
       }
     }
+    spans.push([tokStart, i]);
     prevC = nextC;
     prevQ = nextQ;
   }
-  return { segs };
+  return { segs, spans };
 }
 
 const parseCache = new Map<string, ParsedPath>();
@@ -197,10 +207,13 @@ export function fmt(v: number, places = 3): string {
 }
 
 /**
- * Path data in the compact style icon sets use: whichever of the absolute or relative form of
- * each command is shorter, `h`/`v` for straight axis-aligned lines, no space before a minus sign.
+ * Path data in the compact style icon sets use: whichever of the absolute or relative form of each command is
+ * shorter, `h`/`v` for straight axis-aligned lines, no repeated command letters, and no separators that aren't needed.
+ * With `compact` (the default) numbers drop their leading zero (`.5`) and an arc's two flags are written together
+ * with the end point right after them (`a.5.5 0 01-.063.947`), as in Lucide's own icon files; without it the numbers
+ * and flags are separated by spaces.
  */
-export function serializePath(segs: readonly Seg[], places = 3): string {
+export function serializePath(segs: readonly Seg[], places = 3, compact = true): string {
   let out = '';
   let prevLetter = '';
   // The current point as a reader of the output would reconstruct it.
@@ -211,17 +224,44 @@ export function serializePath(segs: readonly Seg[], places = 3): string {
   const half = 0.5 * 10 ** -places;
   const snap = (v: number) => Number(v.toFixed(places + 3));
 
-  const render = (letter: string, nums: string[]): string => {
+  const num = (v: number): string => {
+    const t = fmt(v, places);
+    return compact ? t.replace(/^(-?)0\./, '$1.') : t;
+  };
+
+  interface Item {
+    t: string;
+    /** Written straight after the previous item, or after a space, whatever it looks like. */
+    join?: 'none' | 'space';
+  }
+
+  const items = (letter: string, nums: number[]): Item[] => {
+    if (letter !== 'A' && letter !== 'a') return nums.map((v) => ({ t: num(v) }));
+    const [rx, ry, rot, large, sweep, x, y] = nums as [number, number, number, number, number, number, number];
+    return compact
+      ? [{ t: num(rx) }, { t: num(ry) }, { t: num(rot) }, { t: `${large}${sweep}`, join: 'space' }, { t: num(x), join: 'none' }, { t: num(y) }]
+      : [{ t: num(rx) }, { t: num(ry) }, { t: num(rot) }, { t: String(large) }, { t: String(sweep) }, { t: num(x) }, { t: num(y) }];
+  };
+
+  const render = (letter: string, list: Item[]): string => {
     const omit = letter === prevLetter && letter !== 'M' && letter !== 'm';
     let s = omit ? '' : letter;
-    nums.forEach((t, k) => {
-      s += k === 0 && !omit ? t : t.startsWith('-') ? t : ` ${t}`;
+    // The number the text ends with: whether the next one needs a separator depends on it.
+    let tail = omit ? /[-\d.]*$/.exec(out)![0] : '';
+    list.forEach((it, k) => {
+      let sep = ' ';
+      if (k === 0 && !omit) sep = '';
+      else if (it.join === 'none') sep = '';
+      else if (it.join === 'space') sep = ' ';
+      else if (it.t.startsWith('-') || (compact && it.t.startsWith('.') && tail.includes('.'))) sep = '';
+      s += sep + it.t;
+      tail = it.t;
     });
     return s;
   };
   const emit = (abs: { letter: string; nums: number[]; end: Pt }, rel: { letter: string; nums: number[]; end: Pt } | null) => {
-    const a = render(abs.letter, abs.nums.map((v) => fmt(v, places)));
-    const r = rel ? render(rel.letter, rel.nums.map((v) => fmt(v, places))) : null;
+    const a = render(abs.letter, items(abs.letter, abs.nums));
+    const r = rel ? render(rel.letter, items(rel.letter, rel.nums)) : null;
     const useRel = r !== null && r.length <= a.length;
     const pick = useRel ? rel! : abs;
     out += useRel ? r : a;

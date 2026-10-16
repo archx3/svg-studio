@@ -178,6 +178,8 @@ const SHORTCUTS: Array<[string, Array<[string, string]>]> = [
       ['+ / −', 'Zoom'],
       ['Shift + 1', 'Fit the canvas'],
       ['O', 'Outline view'],
+      ['C', 'Colour the segments and match them in the code'],
+      ['M', 'Show angles and the size of the shape'],
       ['Ctrl/⌘ + wheel', 'Zoom at the pointer'],
       ['Ctrl/⌘ + S', 'Export'],
     ],

@@ -58,7 +58,7 @@ describe('serializePath', () => {
     expect(roundtrip('M 2 12 L 22 12')).toBe('M2 12h20');
     expect(roundtrip('M12 2 L12 22')).toBe('M12 2v20');
     expect(roundtrip('M5 12H19')).toBe('M5 12h14');
-    expect(roundtrip('M21 12a9 9 0 1 1-6.219-8.56')).toBe('M21 12a9 9 0 1 1-6.219-8.56');
+    expect(roundtrip('M21 12a9 9 0 1 1-6.219-8.56')).toBe('M21 12a9 9 0 11-6.219-8.56');
   });
 
   it('has no space before a minus sign and no repeated command letters', () => {
@@ -89,6 +89,60 @@ describe('serializePath', () => {
         }
       });
     }
+  });
+});
+
+describe('compact path style', () => {
+  // The mouse-pointer icon as Lucide's editor writes it once tidied (the source panel in its screenshot).
+  const tidy = 'M4.037 4.688a.495.495 0 01.651-.651l16 6.5a.5.5 0 01-.063.947l-6.124 1.58a2 2 0 00-1.438 1.435l-1.579 6.126a.5.5 0 01-.947.063z';
+
+  it('writes leading-dot numbers and fused arc flags, and reads them back', () => {
+    expect(roundtrip(tidy)).toBe(tidy);
+    // The same icon written with spaced flags and leading zeros comes out the same.
+    expect(roundtrip('M4.037 4.688a0.495 0.495 0 0 1 0.651 -0.651l16 6.5a0.5 0.5 0 0 1 -0.063 0.947l-6.124 1.58a2 2 0 0 0 -1.438 1.435l-1.579 6.126a0.5 0.5 0 0 1 -0.947 0.063z')).toBe(tidy);
+  });
+
+  it('runs numbers together only where that is unambiguous', () => {
+    expect(roundtrip('M0 0l.5.5.5.5')).toBe('M0 0l.5.5.5.5');
+    expect(roundtrip('M0 0l1 .5')).toBe('M0 0l1 .5'); // a space where the number before has no dot
+    expect(roundtrip('M10 10l.5.5.5.5')).toBe('M10 10l.5.5.5.5'); // and none where it has one, across commands too
+    expect(roundtrip('M10 10l-.5-.5')).toBe('M10 10l-.5-.5');
+  });
+
+  it('can still write the spaced style', () => {
+    const segs = parsePath(tidy).segs;
+    expect(serializePath(segs, 3, false)).toContain('a0.495 0.495 0 0 1 0.651-0.651');
+    expect(parsePath(serializePath(segs, 3, false)).segs).toEqual(segs.map((s) => (s.t === 'A' || s.t === 'L' || s.t === 'M' ? expect.objectContaining({ t: s.t }) : s)));
+  });
+});
+
+describe('path spans', () => {
+  const texts = (d: string) => parsePath(d).spans.map((s) => (s ? d.slice(s[0], s[1]) : null));
+
+  it('records where each segment is written', () => {
+    expect(texts('M4 4a2 2 0 011 1l16 6.5z')).toEqual(['M4 4', 'a2 2 0 011 1', 'l16 6.5', 'z']);
+    expect(texts('M3 3h18v18H3z')).toEqual(['M3 3', 'h18', 'v18', 'H3', 'z']);
+  });
+
+  it('gives every repeated group of numbers its own range', () => {
+    expect(texts('M0 0l1 1 2 2 3 3')).toEqual(['M0 0', 'l1 1', '2 2', '3 3']);
+    expect(texts('M0 0 5 5 10 0')).toEqual(['M0 0', '5 5', '10 0']);
+    expect(texts('M0 0c1 1 2 2 3 3 1 1 2 2 3 3')).toEqual(['M0 0', 'c1 1 2 2 3 3', '1 1 2 2 3 3']);
+  });
+
+  it('leaves out the whitespace and commas between segments', () => {
+    expect(texts('M 0,0  L 1,1 , 2,2 ')).toEqual(['M 0,0', 'L 1,1', '2,2']);
+  });
+
+  it('has no range for the moveto implied after a closepath', () => {
+    const { segs, spans } = parsePath('M1 1h4v4zl2 2');
+    expect(spans).toHaveLength(segs.length);
+    expect(spans.map((s) => s === null)).toEqual([false, false, false, false, true, false]);
+  });
+
+  it('stays parallel to the segments when the path has a mistake', () => {
+    const r = parsePath('M0 0L5 5L oops');
+    expect(r.spans).toHaveLength(r.segs.length);
   });
 });
 
