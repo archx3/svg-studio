@@ -34,13 +34,13 @@ The tools scale and rotate about a **pivot**: the centre by default; drag the pi
 
 **Edit points.** <kbd>A</kbd> (or double-click a shape) shows a path's points and Bézier handles. Drag them; double-click the path to add a point, double-click a point to switch it between corner and smooth; drag a rectangle to select several points; <kbd>Delete</kbd> removes them. Arcs stay arcs. Rectangles, circles and lines become paths on the first edit.
 
-**See how a drawing is built.** Press <kbd>C</kbd> (or the segments button under the canvas) and every segment of every path is drawn in its own colour, and **the same colour is painted behind that segment's text in the source**, so you can see which part of `d="…"` draws which part of the icon. A path's segments run from red to green; other elements get one colour each, and a whole `<rect … />` is coloured as a tag. Each segment is drawn with its centre line (dashed along diagonals), rings at its ends, and, for arcs, the full circle they belong to with its centre marked. The matching works both ways:
+**See how a drawing is built.** Open **Code** and the drawing is shown taken apart, next to its source: every segment of every path in its own colour (a path runs from red to green; other elements get one colour each), and **the same colour painted behind that segment's text**, so you can see which part of `d="…"` draws which part of the icon. The preview marks each segment's centre line (dashed along diagonals), the rings at its ends and, for arcs, the full circle they belong to with its centre; it also shows the angle of every diagonal line, set along the line, and the size of the whole shape (strokes included) above its dashed box (the button in its header turns the labels off). The matching works both ways:
 
-- **Click a segment** on the canvas and its text is selected in the source (and scrolled into view). **Shift-click** picks the whole element.
-- **Put the caret in a segment** of the source and it is ringed on the canvas, with its layer selected.
-- **Hover** a segment on the canvas and its text lights up, and the other way round.
+- **Click a segment** in the preview and its text is selected in the source (and scrolled into view). **Shift-click** picks the whole element. Its layer is selected in the editor too.
+- **Put the caret in a segment** of the source and it is ringed in the preview.
+- **Hover** a segment and its text lights up, and the other way round.
 
-<kbd>M</kbd> (measure) adds the angle of every diagonal line, set along the line, and the size of the whole shape (strokes included) above its dashed box. The source panel has **Source** and **Code** tabs (the second gives the icon as a React component, a Lucide icon node or a CSS data URI to copy), a **Tidy** button, and a drag handle to make it taller. *Tidy* rewrites the source in its shortest form: path data in the compact style Lucide's own files use (`a.5.5 0 01-.063.947`), settings a layer repeats from what it inherits dropped, empty groups removed. It never changes how the icon looks.
+The same colours can be drawn on the main canvas: <kbd>C</kbd> (or the segments button under the canvas) colours the segments there, and <kbd>M</kbd> adds the angles and the size. Both are off until asked for, because they cover the artwork. The source panel has **Source** and **Code** tabs (the second gives the icon as a React component, a Lucide icon node or a CSS data URI to copy), a **Tidy** button, and a drag handle to make it taller. *Tidy* rewrites the source in its shortest form: path data in the compact style Lucide's own files use (`a.5.5 0 01-.063.947`), settings a layer repeats from what it inherits dropped, empty groups removed. It never changes how the icon looks.
 
 **Style.** Stroke colour, width, ends and corners, fill and opacity, for the selection or (with nothing selected) for the whole icon, which is what Lucide icons do through attributes on the root `<svg>`. Layers can be hidden, locked and renamed.
 
@@ -59,7 +59,7 @@ Press <kbd>?</kbd> in the app for the full list.
 | <kbd>[</kbd> <kbd>]</kbd> (+ <kbd>Shift</kbd>) | back / forward (to the end) |
 | arrows (+ <kbd>Shift</kbd>) | nudge by the snap step (0.1 with Shift) |
 | <kbd>Space</kbd> + drag, <kbd>H</kbd> | pan; <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + wheel, <kbd>+</kbd> <kbd>−</kbd> zoom; <kbd>Shift</kbd>+<kbd>1</kbd> fit |
-| <kbd>C</kbd> | colour the segments and match them with the source |
+| <kbd>C</kbd> | colour the segments on the canvas (they are always coloured in the code panel) |
 | <kbd>M</kbd> | show angles and the size of the shape |
 | <kbd>O</kbd> | outline view |
 

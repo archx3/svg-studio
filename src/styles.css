@@ -571,7 +571,8 @@ textarea.input {
   pointer-events: all;
 }
 
-.artboard {
+.artboard,
+.inspect-artboard {
   fill: var(--artboard);
 }
 
@@ -1071,7 +1072,7 @@ textarea.input {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 300px;
+  height: 340px;
   flex: none;
   background: var(--panel);
   border-top: 1px solid var(--line);
@@ -1495,4 +1496,79 @@ textarea.input {
 .code-resize:hover::after,
 .code-resize:focus-visible::after {
   background: var(--accent);
+}
+
+/* --------------------------------------------------- the preview beside the source */
+
+.code-cols {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.code-right {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inspect-pane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: clamp(250px, 32%, 460px);
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.inspect-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px 6px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspect-head h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.inspect-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 10px 12px 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.inspect-scene,
+.inspect-stage .overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.inspect-tip {
+  margin: 0;
+  padding: 4px 14px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .inspect-pane {
+    display: none;
+  }
 }

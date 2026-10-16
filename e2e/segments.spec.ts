@@ -97,11 +97,15 @@ test.describe('segment colours', () => {
     await expect(area(page)).toHaveValue(new RegExp(POINTER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 
-  test('without the segments the source is plain, readable text', async ({ page }) => {
+  test('the source is coloured as soon as it is opened, with nothing switched on', async ({ page }) => {
     await open(page, ICON);
+    await expect(page.getByTestId('code-panel')).toHaveCount(0);
     await page.getByTestId('toggle-code').click();
-    expect(await area(page).evaluate((t) => getComputedStyle(t).color)).not.toBe('rgba(0, 0, 0, 0)');
-    await expect(marks(page)).toHaveCount(0);
+    await expect(marks(page)).toHaveCount(15);
+    // Only the source and its preview show the colours; the canvas is left as it is.
+    await expect(page.getByTestId('segment-layer')).toHaveCount(0);
+    await expect(page.getByTestId('preview-segment-layer')).toBeVisible();
+    expect(await area(page).evaluate((t) => getComputedStyle(t).color)).toBe('rgba(0, 0, 0, 0)');
   });
 
   test('hidden shapes are not coloured, and editing the source keeps the colours matched', async ({ page }) => {
@@ -120,13 +124,11 @@ test.describe('segment colours', () => {
     await expect(page.getByTestId('seg')).toHaveCount(drawn - 1);
   });
 
-  test('the source scrolls to the coloured elements when the segments come on', async ({ page }) => {
-    // A short panel, in which the first element (below the ten lines of the <svg> tag) is out of sight.
-    await page.addInitScript(() => localStorage.setItem('svg-studio:code-height', '170'));
+  test('the source scrolls to the coloured elements when it is opened', async ({ page }) => {
+    // A short panel, in which the first element (below the ten lines of the <svg> tag) would be out of sight.
+    await page.addInitScript(() => localStorage.setItem('svg-studio:code-height', '190'));
     await open(page, ICON);
     await page.getByTestId('toggle-code').click();
-    expect(await area(page).evaluate((t) => t.scrollTop)).toBe(0);
-    await page.keyboard.press('c');
     await expect.poll(() => area(page).evaluate((t) => t.scrollTop)).toBeGreaterThan(100);
     await expect(marks(page).first()).toBeInViewport();
   });
@@ -370,5 +372,109 @@ test.describe('tidy, and the code tab', () => {
     await expect(page.getByTestId('generated-code')).toContainText('background-image: url("data:image/svg+xml,');
     await page.getByTestId('tab-source').click();
     await expect(area(page)).toBeVisible();
+  });
+});
+
+test.describe('the preview beside the source', () => {
+  async function opened(page: Page) {
+    const s = await open(page, ICON);
+    await page.keyboard.press('Escape');
+    await page.getByTestId('toggle-code').click();
+    await expect(page.getByTestId('inspect-pane')).toBeVisible();
+    return s;
+  }
+  const previewSeg = (page: Page, seg: number | string) => page.locator(`[data-testid=preview-seg][data-seg="${seg}"]`);
+  async function centre(page: Page, seg: number | string) {
+    const b = (await previewSeg(page, seg).boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  test('draws every segment in the colour its text has', async ({ page }) => {
+    await opened(page);
+    const pairs = await page.evaluate(() => {
+      const segs = [...document.querySelectorAll('[data-testid=preview-seg]')].map((e) => ({ id: e.getAttribute('data-id'), seg: e.getAttribute('data-seg'), painted: getComputedStyle(e).stroke }));
+      const mks = [...document.querySelectorAll('[data-testid=mark]')].map((e) => ({ id: e.getAttribute('data-id'), seg: e.getAttribute('data-seg'), painted: getComputedStyle(e).backgroundColor }));
+      return { segs, mks };
+    });
+    expect(pairs.segs.length).toBeGreaterThanOrEqual(14);
+    for (const sg of pairs.segs) {
+      const m = pairs.mks.find((x) => x.id === sg.id && x.seg === sg.seg);
+      expect(m, `a mark for segment ${sg.seg} of ${sg.id}`).toBeTruthy();
+      expect(m!.painted).toBe(sg.painted);
+    }
+  });
+
+  test('shows the angle of diagonal lines and the size of the shape, which can be switched off', async ({ page }) => {
+    await opened(page);
+    const labels = await page.getByTestId('preview-angle-label').allTextContents();
+    expect(labels).toEqual(expect.arrayContaining(['22.11°', '14.47°', '75.55°', '67.89°']));
+    await expect(page.getByTestId('preview-shape-size')).toHaveText('shape 20x20');
+    await page.getByTestId('preview-labels').click();
+    await expect(page.getByTestId('preview-angle-label')).toHaveCount(0);
+    await expect(page.getByTestId('preview-shape-size')).toHaveCount(0);
+    await page.getByTestId('preview-labels').click();
+    await expect(page.getByTestId('preview-shape-size')).toBeVisible();
+  });
+
+  test('pointing at a segment lights up its text, and clicking selects it', async ({ page }) => {
+    await opened(page);
+    const p = await centre(page, 1); // the long diagonal line, l16 6.5
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator('.code-box.hover')).toHaveCount(1);
+    await expect(page.getByTestId('preview-seg-halo')).toHaveAttribute('data-seg', '1');
+    await page.mouse.click(p.x, p.y);
+    expect(await selectedText(page)).toBe('l16 6.5');
+    await expect(page.locator('.code-box.focus')).toHaveCount(1);
+    // The layer is selected in the editor too.
+    await expect(page.getByTestId('layer').nth(3)).toHaveClass(/selected/);
+    // Another segment moves the selection.
+    const q = await centre(page, 3);
+    await page.mouse.click(q.x, q.y);
+    expect(await selectedText(page)).toBe('l-6.124 1.58');
+    // Away from the drawing, nothing is lit.
+    const stage = (await page.getByTestId('inspect-stage').boundingBox())!;
+    await page.mouse.move(stage.x + 8, stage.y + 8);
+    await expect(page.locator('.code-box.hover')).toHaveCount(0);
+  });
+
+  test('shift-click selects the whole element, and a click on nothing lets go', async ({ page }) => {
+    await opened(page);
+    const p = await centre(page, 1);
+    await page.keyboard.down('Shift');
+    await page.mouse.click(p.x, p.y);
+    await page.keyboard.up('Shift');
+    expect(await selectedText(page)).toBe(`<path d="${POINTER}" />`);
+    const stage = (await page.getByTestId('inspect-stage').boundingBox())!;
+    await page.mouse.click(stage.x + 8, stage.y + 8);
+    await expect(page.locator('.code-box.focus')).toHaveCount(0);
+  });
+
+  test('the caret in the source rings the segment in the preview', async ({ page }) => {
+    await opened(page);
+    await area(page).evaluate((t: HTMLTextAreaElement) => {
+      t.focus();
+      const i = t.value.indexOf('a2 2 0 00') + 3;
+      t.setSelectionRange(i, i);
+    });
+    await expect(page.getByTestId('preview-seg-halo')).toHaveAttribute('data-seg', '4');
+  });
+
+  test('follows the drawing as it changes', async ({ page }) => {
+    await opened(page);
+    const drawn = await page.getByTestId('preview-seg').count();
+    const row = page.getByTestId('layer').first(); // the rectangle
+    await row.hover();
+    await row.getByRole('button', { name: 'Hide' }).click();
+    await expect(page.getByTestId('preview-seg')).toHaveCount(drawn - 1);
+    await page.getByTestId('undo').click();
+    await expect(page.getByTestId('preview-seg')).toHaveCount(drawn);
+  });
+
+  test('is on its own: the canvas shows no colours until asked', async ({ page }) => {
+    await opened(page);
+    await expect(page.getByTestId('segment-layer')).toHaveCount(0);
+    await page.keyboard.press('c');
+    await expect(page.getByTestId('segment-layer')).toBeVisible();
+    await expect(page.getByTestId('preview-segment-layer')).toBeVisible();
   });
 });

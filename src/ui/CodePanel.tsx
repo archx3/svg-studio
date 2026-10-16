@@ -10,6 +10,7 @@ import { store, useEditor, type SegRef } from '../state/store';
 import { copyText, iconNodeForExport, jsxForExport, svgForExport } from './export';
 import { Segmented } from './fields';
 import { Icon } from './icons';
+import { PreviewPane } from './PreviewPane';
 
 type Tab = 'source' | 'code';
 type Format = 'react' | 'node' | 'uri';
@@ -36,19 +37,17 @@ function lineBoxes(text: string, a: number, b: number): Array<{ line: number; co
 interface SourceViewProps {
   text: string;
   onChange(value: string): void;
-  /** The text matched to the drawing, when the segments are shown (null otherwise, or while the text doesn't match). */
+  /** The text matched to the drawing (null while the text doesn't match it, e.g. with an edit that has not been read yet). */
   entries: SourceEntry[] | null;
-  /** The segments are shown: the text is drawn in the layer behind the editor, with its colours. */
-  layered: boolean;
   hover: SegRef | null;
   focus: SegRef | null;
 }
 
 /**
- * The editable source. With the segments shown, the text is also drawn in a layer behind the (then transparent)
- * editor, so that the text of each segment can be given the colour it has on the canvas.
+ * The editable source. The text is drawn in a layer behind the (transparent) editor, which only keeps the caret and the
+ * selection, so that the text of each segment can be given the colour that segment is drawn in.
  */
-function SourceView({ text, onChange, entries, layered, hover, focus }: SourceViewProps) {
+function SourceView({ text, onChange, entries, hover, focus }: SourceViewProps) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const ruler = useRef<HTMLSpanElement>(null);
@@ -60,7 +59,6 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
   }, [text]);
 
   const pieces = useMemo(() => {
-    if (!layered) return null;
     const marks = (entries ? buildMarks(entries) : []).sort((a, b) => a.start - b.start);
     const out: ReactNode[] = [];
     let at = 0;
@@ -77,7 +75,7 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
     // (the final newline keeps the layer exactly as tall as the editor's text)
     out.push(text.slice(at) + '\n');
     return out;
-  }, [layered, entries, text]);
+  }, [entries, text]);
 
   const rangeOf = (ref: SegRef | null): [number, number] | null => {
     if (!ref || !entries) return null;
@@ -97,14 +95,14 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
     const c = content.current;
     if (el && c) c.style.transform = `translate(${-el.scrollLeft}px, ${-el.scrollTop}px)`;
   };
-  useLayoutEffect(sync, [text, layered]);
+  useLayoutEffect(sync, [text]);
 
   const charWidth = () => (ruler.current?.getBoundingClientRect().width ?? 0) / 10;
 
   /* Pointing at the text points at the segment on the canvas. */
   const onMove = (e: MouseEvent<HTMLTextAreaElement>) => {
     const el = ta.current;
-    if (!layered || !entries || !el) return;
+    if (!entries || !el) return;
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();
     const charW = charWidth();
@@ -117,10 +115,10 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
     hoverSegment(index < lineEnd ? pointAt(entries, index) : null);
   };
 
-  /* Switching the segments on brings the first coloured element into view, so the colours are seen at once. */
+  /* Opening the source brings the first coloured element into view, so the colours are seen at once. */
   useEffect(() => {
     const el = ta.current;
-    if (!layered || !el || !entries || document.activeElement === el) return;
+    if (!el || !entries || document.activeElement === el) return;
     const first = entries.find((e) => !e.shape.hidden);
     if (!first) return;
     const lineH = parseFloat(getComputedStyle(el).lineHeight);
@@ -128,12 +126,12 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
     el.scrollTop = Math.max(0, (line - 1) * lineH);
     el.scrollLeft = 0;
     sync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the segments are switched on
-  }, [layered]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the source is opened
+  }, []);
 
   /* Moving the caret into a segment picks it on the canvas. */
   useEffect(() => {
-    if (!layered || !entries) return;
+    if (!entries) return;
     const onSelection = () => {
       const el = ta.current;
       if (!el || document.activeElement !== el) return;
@@ -142,12 +140,12 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
     };
     document.addEventListener('selectionchange', onSelection);
     return () => document.removeEventListener('selectionchange', onSelection);
-  }, [layered, entries]);
+  }, [entries]);
 
   /* Picking a segment on the canvas selects its text and scrolls to it (without taking the keyboard away from the canvas). */
   useEffect(() => {
     const el = ta.current;
-    if (!layered || !el || document.activeElement === el) return;
+    if (!el || document.activeElement === el) return;
     const range = rangeOf(focus);
     if (!range) return;
     el.setSelectionRange(range[0], range[1]);
@@ -162,17 +160,15 @@ function SourceView({ text, onChange, entries, layered, hover, focus }: SourceVi
   }, [focus, entries]);
 
   return (
-    <div className={`code-wrap ${layered ? 'layered' : ''}`}>
-      {layered && (
-        <div className="code-under" aria-hidden="true">
-          <div className="code-content" ref={content}>
-            <pre className="code-pre">{pieces}</pre>
-            {boxes.map((b, i) => (
-              <div key={i} className={`code-box ${b.kind}`} style={{ top: `calc(var(--code-pad-y) + ${b.line} * var(--code-lh))`, left: `calc(var(--code-pad-x) + ${b.col}ch)`, width: `${b.len}ch` }} />
-            ))}
-          </div>
+    <div className="code-wrap layered">
+      <div className="code-under" aria-hidden="true">
+        <div className="code-content" ref={content}>
+          <pre className="code-pre">{pieces}</pre>
+          {boxes.map((b, i) => (
+            <div key={i} className={`code-box ${b.kind}`} style={{ top: `calc(var(--code-pad-y) + ${b.line} * var(--code-lh))`, left: `calc(var(--code-pad-x) + ${b.col}ch)`, width: `${b.len}ch` }} />
+          ))}
         </div>
-      )}
+      </div>
       <span className="code-ruler" ref={ruler} aria-hidden="true">
         0000000000
       </span>
@@ -228,7 +224,6 @@ function GeneratedCode({ doc, name }: { doc: Doc; name: string }) {
 export function CodePanel({ onClose }: { onClose(): void }) {
   const doc = useEditor((s) => s.doc);
   const name = useEditor((s) => s.name);
-  const segmentsOn = useEditor((s) => s.settings.segments);
   const hover = useEditor((s) => s.hoverSeg);
   const focus = useEditor((s) => s.focus);
   const generated = useMemo(() => serializeSvg(doc, { includeHidden: true }), [doc]);
@@ -241,9 +236,9 @@ export function CodePanel({ onClose }: { onClose(): void }) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [height, setHeight] = useState(() => {
     try {
-      return Number(localStorage.getItem('svg-studio:code-height')) || 300;
+      return Number(localStorage.getItem('svg-studio:code-height')) || 340;
     } catch {
-      return 300;
+      return 340;
     }
   });
   const resize = (h: number) => {
@@ -266,7 +261,7 @@ export function CodePanel({ onClose }: { onClose(): void }) {
   }, [generated]);
 
   const shapes = useMemo(() => inspectShapes(doc), [doc]);
-  const entries = useMemo(() => (segmentsOn ? mapSource(text, shapes) : null), [segmentsOn, text, shapes]);
+  const entries = useMemo(() => mapSource(text, shapes), [text, shapes]);
 
   const onChange = (value: string) => {
     setText(value);
@@ -333,6 +328,9 @@ export function CodePanel({ onClose }: { onClose(): void }) {
           }
         }}
       />
+      <div className="code-cols">
+        <PreviewPane />
+        <div className="code-right">
       <div className="code-head">
         <div className="tabs" role="tablist" aria-label="Code views">
           <button type="button" role="tab" aria-selected={tab === 'source'} className={`tab ${tab === 'source' ? 'on' : ''}`} data-testid="tab-source" onClick={() => setTab('source')}>
@@ -348,7 +346,7 @@ export function CodePanel({ onClose }: { onClose(): void }) {
           ) : warning ? (
             <span className="status warn">{warning}</span>
           ) : (
-            <span className="status ok">{segmentsOn ? 'Colours match the segments on the canvas' : 'Edits here update the canvas'}</span>
+            <span className="status ok">Colours match the segments in the preview</span>
           ))}
         <span className="grow" />
         {tab === 'source' && (
@@ -365,7 +363,9 @@ export function CodePanel({ onClose }: { onClose(): void }) {
           <Icon name="x" size={16} />
         </button>
       </div>
-      {tab === 'source' ? <SourceView text={text} onChange={onChange} entries={entries} layered={segmentsOn} hover={hover} focus={focus} /> : <GeneratedCode doc={doc} name={name} />}
+      {tab === 'source' ? <SourceView text={text} onChange={onChange} entries={entries} hover={hover} focus={focus} /> : <GeneratedCode doc={doc} name={name} />}
+        </div>
+      </div>
     </div>
   );
 }

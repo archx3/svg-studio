@@ -8,6 +8,8 @@ interface Props {
   zoom: number;
   hover: SegRef | null;
   focus: SegRef | null;
+  /** Prefix for the test ids, so that more than one layer can be on the page. */
+  ns?: string;
 }
 
 const WHITE = { stroke: '#fff' } as const;
@@ -18,7 +20,7 @@ const segAttr = (sh: ShapeInspect, k: number): number | string => (sh.perSegment
 /** Whether a segment is the one a reference points at (or is part of the element it points at). */
 const pointedAt = (ref: SegRef | null, id: string, seg: number): boolean => !!ref && ref.id === id && (ref.seg === null || ref.seg === seg);
 
-function ShapeSegments({ sh, zoom, hover, focus }: { sh: ShapeInspect; zoom: number; hover: SegRef | null; focus: SegRef | null }) {
+function ShapeSegments({ sh, zoom, hover, focus, ns }: { sh: ShapeInspect; zoom: number; hover: SegRef | null; focus: SegRef | null; ns: string }) {
   const stroked = strokeVisible(sh.style);
   const w = stroked ? (sh.style.strokeWidth ?? 1) : 1.5 / zoom;
   const cap = sh.style.strokeLinecap ?? 'butt';
@@ -38,12 +40,12 @@ function ShapeSegments({ sh, zoom, hover, focus }: { sh: ShapeInspect; zoom: num
     const color = inspectColor(sh, piece.k);
     const hot = sh.perSegment ? pointedAt(hover, sh.id, piece.k) || pointedAt(focus, sh.id, piece.k) : pointedAt(hover, sh.id, 0) || pointedAt(focus, sh.id, 0);
     if (hot) {
-      out.push(<path key={`h${piece.k}`} data-testid="seg-halo" data-id={sh.id} data-seg={segAttr(sh, piece.k)} d={piece.d} style={{ stroke: 'var(--ink)' }} strokeWidth={w + 5 / zoom} strokeLinecap={cap} strokeLinejoin={join} opacity={0.85} />);
+      out.push(<path key={`h${piece.k}`} data-testid={`${ns}seg-halo`} data-id={sh.id} data-seg={segAttr(sh, piece.k)} d={piece.d} style={{ stroke: 'var(--ink)' }} strokeWidth={w + 5 / zoom} strokeLinecap={cap} strokeLinejoin={join} opacity={0.85} />);
     }
     out.push(
       <path
         key={`s${piece.k}`}
-        data-testid="seg"
+        data-testid={`${ns}seg`}
         data-id={sh.id}
         data-seg={segAttr(sh, piece.k)}
         data-color={color}
@@ -74,17 +76,17 @@ function ShapeSegments({ sh, zoom, hover, focus }: { sh: ShapeInspect; zoom: num
       node(sg.to, `n${sg.index}t`);
     }
   }
-  return <g data-testid="shape-segments">{out}</g>;
+  return <g data-testid={`${ns}shape-segments`}>{out}</g>;
 }
 
 /** The drawing taken apart: every segment in its own colour, with its centre line, its end points and, for arcs, the circle they come from. */
-export const SegmentLayer = memo(function SegmentLayer({ shapes, zoom, hover, focus }: Props) {
+export const SegmentLayer = memo(function SegmentLayer({ shapes, zoom, hover, focus, ns = '' }: Props) {
   return (
-    <g className="segments" fill="none" data-testid="segment-layer">
+    <g className="segments" fill="none" data-testid={`${ns}segment-layer`}>
       {shapes
         .filter((s) => !s.hidden)
         .map((sh) => (
-          <ShapeSegments key={sh.id} sh={sh} zoom={zoom} hover={hover} focus={focus} />
+          <ShapeSegments key={sh.id} sh={sh} zoom={zoom} hover={hover} focus={focus} ns={ns} />
         ))}
     </g>
   );
